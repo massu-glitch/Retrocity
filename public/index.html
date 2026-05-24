@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro City - MMO</title>
+    <title>Retro City - Mundo Asimétrico y Curvas (MMO)</title>
     <style>
-        /* === HE DEVUELTO TODO TU CSS ORIGINAL === */
         * { box-sizing: border-box; }
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -17,6 +16,20 @@
         
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
+        #zoom-controls {
+            position: absolute; top: 20px; left: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+            pointer-events: auto; z-index: 20;
+        }
+        .zoom-btn {
+            position: relative; width: 45px; height: 45px;
+            font-size: 26px; border-radius: 8px;
+            background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; border: 2px solid rgba(255,255,255,0.5);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px #000; cursor: pointer;
+        }
+        .zoom-btn:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
+
         #hud {
             position: absolute; top: 20px; right: 20px;
             background: rgba(0,0,0,0.6); color: #fff;
@@ -29,6 +42,8 @@
             border-radius: 4px; overflow: hidden; margin-top: 5px; border: 1px solid #000;
         }
         #health-bar { width: 100%; height: 100%; background: #e74c3c; transition: width 0.2s; }
+        #stamina-bar { width: 100%; height: 100%; background: #3498db; transition: width 0.1s; } 
+        #wanted-stars { color: #f1c40f; font-size: 20px; letter-spacing: 2px; text-shadow: 1px 1px 2px #000; min-height: 24px; }
         
         #minimap-container {
             position: absolute; bottom: 20px; left: 20px;
@@ -50,6 +65,22 @@
             width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
         }
 
+        #dpad {
+            display: none; position: absolute; bottom: 40px; left: 40px; width: 140px; height: 140px; z-index: 20; pointer-events: auto;
+        }
+        .dpad-btn {
+            position: absolute; width: 45px; height: 45px;
+            background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 8px; color: white; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px #000; user-select: none;
+        }
+        .dpad-btn:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
+        #btn-up { top: 0; left: 47.5px; }
+        #btn-down { bottom: 0; left: 47.5px; }
+        #btn-left { top: 47.5px; left: 0; }
+        #btn-right { top: 47.5px; right: 0; }
+
         .action-btn {
             position: absolute; width: 65px; height: 65px;
             background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.5);
@@ -58,36 +89,153 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px #000; transition: background 0.2s;
         }
         .action-btn:active { transform: scale(0.95); }
+        #btn-shoot { bottom: 40px; right: 120px; background: rgba(231, 76, 60, 0.4); display: none !important; }
         #btn-action { bottom: 100px; right: 40px; background: rgba(52, 152, 219, 0.4); }
+        
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(44,62,80,0.95) 0%, rgba(0,0,0,0.95) 100%);
+            color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center;
+        }
+        #start-screen h1 { font-size: 3rem; color: #f1c40f; text-shadow: 3px 3px 0 #e74c3c; margin-bottom: 10px; }
+        #start-screen button {
+            padding: 15px 40px; font-size: 22px; font-family: inherit; font-weight: bold;
+            background: #e74c3c; color: white; border: 2px solid #c0392b; border-radius: 8px; cursor: pointer; margin-top: 30px;
+            box-shadow: 0 5px 0 #c0392b; transition: all 0.1s;
+        }
+        #start-screen button:active { transform: translateY(5px); box-shadow: none; }
+        
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: inset 0 0 100px rgba(255,0,0,0); pointer-events: none; z-index: 5; transition: box-shadow 0.2s;
+        }
 
-        @media (hover: hover) and (pointer: fine) { .touch-zone, .joystick-base { display: none !important; } }
+        #job-menu {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(17, 17, 17, 0.95); padding: 20px; border: 2px solid #3498db; 
+            color: white; border-radius: 12px; z-index: 100; max-height: 85%; overflow-y: auto; width: 320px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8); pointer-events: auto; font-family: 'Courier New', Courier, monospace;
+        }
+        #job-menu h2 { margin-top: 0; color: #3498db; text-align: center; }
+        .job-item { padding: 10px; margin-bottom: 8px; background: #2c3e50; border-radius: 6px; cursor: pointer; border: 1px solid #34495e; transition: 0.1s; }
+        .job-item:active { transform: scale(0.98); }
+        .job-item.locked { opacity: 0.4; cursor: not-allowed; }
+        .job-item.locked:active { transform: none; }
+        
+        #working-overlay {
+            display: none; position: absolute; bottom: 25%; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 8px; color: #fff; text-align: center;
+            z-index: 90; border: 2px solid #f1c40f; box-shadow: 0 0 15px rgba(0,0,0,0.8); font-size: 18px; font-weight: bold;
+        }
+        #working-bar-container { width: 250px; height: 18px; background: #222; border: 1px solid #fff; margin-top: 10px; border-radius: 4px; overflow: hidden; }
+        #working-bar { width: 0%; height: 100%; background: #f1c40f; }
+        #btn-close-jobs { width: 100%; padding: 10px; margin-top: 10px; background: #e74c3c; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+
+        #interaction-prompt {
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.9); color: white; padding: 10px 20px; border-radius: 8px;
+            font-weight: bold; display: none; text-align: center; pointer-events: none;
+            border: 2px solid white; z-index: 50; text-shadow: 1px 1px 2px #000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+
+        @media (hover: hover) and (pointer: fine) { .touch-zone, .joystick-base, #dpad { display: none !important; } }
     </style>
+    
+    <!-- LIBRERIA MULTIJUGADOR -->
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
+    <div id="start-screen">
+        <h1>RETRO CITY MMO</h1>
+        <p>Pilotos en Motos, Trabajos, GPS y Físicas.</p>
+        <p style="color: #bdc3c7;">PC: WASD mover, SHIFT correr, E Acción/Vehículo.</p>
+        <button id="start-btn">JUGAR</button>
+    </div>
+
+    <div id="damage-overlay"></div>
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
+        <div id="zoom-controls">
+            <div class="zoom-btn" id="btn-zoom-in">+</div>
+            <div class="zoom-btn" id="btn-zoom-out">-</div>
+            <div class="zoom-btn" id="job-btn" style="background: rgba(52, 152, 219, 0.7); font-size: 20px;">💼</div>
+        </div>
+
         <div id="hud">
-            <div id="money-display" style="color: #2ecc71; font-weight: bold; font-size: 24px; margin-bottom: 5px; text-shadow: 1px 1px 2px #000;">MMO BETA</div>
+            <div id="money-display" style="color: #2ecc71; font-weight: bold; font-size: 24px; margin-bottom: 5px; text-shadow: 1px 1px 2px #000;">$0</div>
+            <div id="wanted-stars"></div>
             <div class="bar-container"><div id="health-bar"></div></div>
+            <div class="bar-container"><div id="stamina-bar"></div></div>
         </div>
         <div id="minimap-container"><canvas id="minimap"></canvas></div>
+        
+        <div id="interaction-prompt">🏢 AGENCIA DE EMPLEO<br><span style="font-size:12px">Usa la tecla 'E' o el botón ACCIÓN</span></div>
+        
+        <div id="dpad">
+            <div class="dpad-btn" id="btn-up">▲</div>
+            <div class="dpad-btn" id="btn-down">▼</div>
+            <div class="dpad-btn" id="btn-left">◀</div>
+            <div class="dpad-btn" id="btn-right">▶</div>
+        </div>
     </div>
 
-    <!-- Controles táctiles -->
+    <div id="job-menu"></div>
+    <div id="working-overlay">
+        <div id="working-title">Trabajando...</div>
+        <div id="working-bar-container"><div id="working-bar"></div></div>
+    </div>
+
     <div class="touch-zone" id="left-touch">
         <div class="joystick-base" id="joystick"><div class="joystick-knob" id="knob"></div></div>
     </div>
     <div class="touch-zone" id="right-touch">
+        <div class="action-btn" id="btn-shoot">DISPARAR</div>
         <div class="action-btn" id="btn-action">ENTRAR<br>SALIR</div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-
 <script>
 // ==========================================
-// CONFIGURACIÓN INICIAL
+// CONSTANTES Y BASE DE DATOS
+// ==========================================
+const TILE_SIZE = 200; 
+const TYPES = { GRASS: 0, ROAD: 1, BUILDING: 2, TREE: 3, SIDEWALK: 4, WATER: 5 };
+const VEHICLE_COLORS = ['#e74c3c', '#2ecc71', '#9b59b6', '#34495e', '#ecf0f1', '#1abc9c', '#d35400', '#7f8c8d'];
+const BUILDING_COLORS = ['#2c3e50', '#8e44ad', '#d35400', '#c0392b', '#16a085', '#2c2c54'];
+const HQ_OVERRIDES = {}; 
+
+const XP_REQ = [0, 100, 300, 600, 1000, 999999]; 
+
+const JOBS = [
+    { id: 'pizza', name: 'Repartidor de Pizza', level: 1, pay: 15, xp: 15, time: 3, vType: 'MOTO', vColor: '#e74c3c' },
+    { id: 'cleaner', name: 'Serv. de Limpieza', level: 1, pay: 20, xp: 20, time: 60, vType: 'SUV', vColor: '#ecf0f1' },
+    { id: 'lumberjack', name: 'Leñador', level: 2, pay: 40, xp: 30, time: 5, vType: 'TRUCK', vColor: '#d35400' },
+    { id: 'farmer', name: 'Agricultor', level: 2, pay: 35, xp: 28, time: 5, vType: 'QUAD', vColor: '#27ae60' },
+    { id: 'office', name: 'Oficinista', level: 3, pay: 70, xp: 50, time: 6, vType: 'SEDAN', vColor: '#95a5a6' },
+    { id: 'electrician', name: 'Electricista', level: 3, pay: 80, xp: 60, time: 7, vType: 'SUV', vColor: '#3498db' },
+    { id: 'taxi', name: 'Taxista', level: 4, pay: 140, xp: 80, time: 8, vType: 'TAXI', vColor: '#f1c40f' },
+    { id: 'trucker', name: 'Camionero', level: 4, pay: 160, xp: 90, time: 9, vType: 'TRUCK', vColor: '#2980b9' },
+    { id: 'mechanic', name: 'Mecánico', level: 5, pay: 250, xp: 120, time: 10, vType: 'TRUCK', vColor: '#7f8c8d' },
+    { id: 'doctor', name: 'Médico', level: 5, pay: 300, xp: 150, time: 11, vType: 'SEDAN', vColor: '#ecf0f1' },
+    { id: 'police', name: 'Policía', level: 5, pay: 280, xp: 130, time: 10, vType: 'POLICE', vColor: '#111111' }
+];
+
+const VEHICLE_DEFS = {
+    SEDAN:  { w: 60,  h: 28, maxSpeed: 650, accel: 450, friction: 150, grip: 1.0, hp: 300, mass: 1.0, colors: VEHICLE_COLORS },
+    SPORTS: { w: 62,  h: 26, maxSpeed: 950, accel: 700, friction: 120, grip: 0.8, hp: 250, mass: 0.9, colors: ['#e74c3c', '#f1c40f', '#2980b9'] },
+    POLICE: { w: 60,  h: 28, maxSpeed: 900, accel: 650, friction: 180, grip: 1.2, hp: 400, mass: 1.2, colors: ['#111111'] },
+    TAXI:   { w: 60,  h: 28, maxSpeed: 600, accel: 400, friction: 150, grip: 1.0, hp: 300, mass: 1.0, colors: ['#f1c40f'] },
+    SUV:    { w: 68,  h: 32, maxSpeed: 550, accel: 350, friction: 200, grip: 1.1, hp: 450, mass: 1.5, colors: VEHICLE_COLORS },
+    TRUCK:  { w: 120, h: 36, maxSpeed: 400, accel: 200, friction: 250, grip: 0.7, hp: 800, mass: 3.5, colors: ['#bdc3c7', '#34495e', '#7f8c8d'] },
+    MOTO:   { w: 32,  h: 12, maxSpeed: 850, accel: 800, friction: 100, grip: 1.4, hp: 100, mass: 0.3, colors: VEHICLE_COLORS },
+    QUAD:   { w: 35,  h: 22, maxSpeed: 650, accel: 700, friction: 220, grip: 1.5, hp: 150, mass: 0.5, colors: ['#27ae60', '#e67e22', '#c0392b'] }
+};
+
+const SPAWN_POOL = ['SEDAN','SEDAN','SEDAN','SEDAN','SUV','SUV','SUV','TAXI','TAXI','TRUCK','TRUCK','MOTO','MOTO','QUAD','SPORTS','SPORTS','POLICE'];
+
+// ==========================================
+// MOTOR Y ESTADO
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -98,77 +246,16 @@ let width, height;
 function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize); resize();
 
-const socket = io();
-let serverState = null;
-let myId = null;
-let camera = { x: 2000, y: 2000, zoom: 1.15 };
-let keys = { up: false, down: false, left: false, right: false };
-
-socket.on('connect', () => { myId = socket.id; });
-socket.on('stateUpdate', (newState) => { serverState = newState; });
-
-// ==========================================
-// INPUTS Y CONTROLES
-// ==========================================
-function sendInput() { socket.emit('input', keys); }
-
-window.addEventListener('keydown', e => { 
-    if(e.key === 'w' || e.key === 'ArrowUp') keys.up = true;
-    if(e.key === 's' || e.key === 'ArrowDown') keys.down = true;
-    if(e.key === 'a' || e.key === 'ArrowLeft') keys.left = true;
-    if(e.key === 'd' || e.key === 'ArrowRight') keys.right = true;
-    if(e.key === 'e' || e.key === 'E') socket.emit('action');
-    sendInput();
-});
-window.addEventListener('keyup', e => { 
-    if(e.key === 'w' || e.key === 'ArrowUp') keys.up = false;
-    if(e.key === 's' || e.key === 'ArrowDown') keys.down = false;
-    if(e.key === 'a' || e.key === 'ArrowLeft') keys.left = false;
-    if(e.key === 'd' || e.key === 'ArrowRight') keys.right = false;
-    sendInput();
-});
-document.getElementById('btn-action').addEventListener('touchstart', e => { e.preventDefault(); socket.emit('action'); });
-document.getElementById('btn-action').addEventListener('click', () => socket.emit('action'));
-
-// Joystick Móvil
-const leftZ = document.getElementById('left-touch'), jBase = document.getElementById('joystick'), jKnob = document.getElementById('knob');
-let jId = null, jSX, jSY;
-leftZ.addEventListener('touchstart', e => {
-    e.preventDefault(); let t = e.changedTouches[0]; jId = t.identifier; jSX = t.clientX; jSY = t.clientY;
-    jBase.style.display = 'block'; jBase.style.left = (jSX-50)+'px'; jBase.style.top = (jSY-50)+'px';
-}, {passive: false});
-leftZ.addEventListener('touchmove', e => {
-    e.preventDefault();
-    for (let i=0; i<e.changedTouches.length; i++) {
-        let t = e.changedTouches[i];
-        if (t.identifier === jId) {
-            let dx = t.clientX - jSX, dy = t.clientY - jSY, dist = Math.hypot(dx,dy), max = 40;
-            if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
-            jKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-            
-            // Simular teclado con joystick
-            keys.right = (dx/max) > 0.3; keys.left = (dx/max) < -0.3;
-            keys.down = (dy/max) > 0.3;  keys.up = (dy/max) < -0.3;
-            sendInput();
-        }
-    }
-}, {passive: false});
-const endJ = e => { 
-    e.preventDefault(); 
-    for(let i=0; i<e.changedTouches.length; i++) if(e.changedTouches[i].identifier===jId){
-        jId=null; jBase.style.display='none'; jKnob.style.transform=`translate(-50%,-50%)`;
-        keys.up=false; keys.down=false; keys.left=false; keys.right=false; sendInput();
-    } 
+const Game = {
+    vehicles: [], npcs: [], bullets: [], player: null,
+    camera: { x: 0, y: 0, zoom: 1.15, zoomTarget: 1.15, offsetX: 0, offsetY: 0 },
+    timeOfDay: 12.0, wantedLevel: 0, keys: {}, joystick: { x: 0, y: 0, active: false }, lastTime: 0,
+    jobAgencyLoc: null 
 };
-leftZ.addEventListener('touchend', endJ, {passive: false}); leftZ.addEventListener('touchcancel', endJ, {passive: false});
 
 // ==========================================
-// MAPA Y TEXTURAS (TU CÓDIGO ORIGINAL)
+// MAPA Y NAVEGACIÓN
 // ==========================================
-const TILE_SIZE = 200; 
-const TYPES = { GRASS: 0, ROAD: 1, BUILDING: 2, TREE: 3, SIDEWALK: 4, WATER: 5 };
-const BUILDING_COLORS = ['#2c3e50', '#8e44ad', '#d35400', '#c0392b', '#16a085', '#2c2c54'];
-
 function isTownArea(tx, ty) {
     let rx = Math.floor(tx / 64), ry = Math.floor(ty / 64);
     let hash = Math.abs(Math.sin(rx * 12.9898 + ry * 78.233) * 43758.5453);
@@ -191,12 +278,16 @@ function getRoadType(tx, ty) {
     return 'NONE';
 }
 function getTileType(tx, ty) {
+    let key = tx + ',' + ty;
+    if (HQ_OVERRIDES[key] !== undefined) return HQ_OVERRIDES[key]; 
+
     let road = getRoadType(tx, ty);
     if (road !== 'NONE') return TYPES.ROAD;
     let isTown = isTownArea(tx, ty);
     let hash = Math.abs(Math.sin(tx * 12.989 + ty * 78.233));
     if (isTown) {
-        let nearRoad = getRoadType(tx+1, ty)!=='NONE' || getRoadType(tx-1, ty)!=='NONE' || getRoadType(tx, ty+1)!=='NONE' || getRoadType(tx, ty-1)!=='NONE';
+        let nearRoad = getRoadType(tx+1, ty)!=='NONE' || getRoadType(tx-1, ty)!=='NONE' || 
+                       getRoadType(tx, ty+1)!=='NONE' || getRoadType(tx, ty-1)!=='NONE';
         if (nearRoad) return TYPES.SIDEWALK;
         if (hash < 0.1) return TYPES.TREE;
         if (hash < 0.2) return TYPES.SIDEWALK;
@@ -208,169 +299,300 @@ function getTileType(tx, ty) {
         return TYPES.GRASS;
     }
 }
+function getTile(x, y) { return getTileType(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)); }
 
-// ==========================================
-// DIBUJO DE ENTIDADES (TUS GRÁFICOS ORIGINALES)
-// ==========================================
-function drawPlayer(ctx, p, isMe) {
-    if (p.inVehicle) return; 
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(0.75, 0.75); 
+function findBuildingEntrance(cx, cy, minRadiusPx = 0) {
+    let tx = Math.floor(cx / TILE_SIZE);
+    let ty = Math.floor(cy / TILE_SIZE);
+    let startRadius = Math.max(1, Math.floor(minRadiusPx / TILE_SIZE));
     
-    // Sombra original
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(3, 5, 12, 0, Math.PI*2); ctx.fill();
-    
-    ctx.rotate(p.angle);
-    ctx.lineWidth = 1.5; ctx.strokeStyle = '#111';
-    
-    // Cuerpo y brazos originales
-    ctx.fillStyle = isMe ? '#3498db' : '#95a5a6'; 
-    ctx.beginPath(); ctx.fillRect(-10, -15, 20, 30); ctx.strokeRect(-10, -15, 20, 30);
-    ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(10, 15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(10, -15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.restore();
-}
-
-function drawVehicle(ctx, v) {
-    ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(v.angle);
-    
-    // Sombras originales
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    if (v.type === 'MOTO') ctx.fillRect(-16, -6, 32, 12);
-    else ctx.fillRect(-30, -14, 60, 28);
-    
-    ctx.lineWidth = 2; ctx.strokeStyle = '#111';
-
-    // Ruedas y carrocería
-    let isMoto = (v.type === 'MOTO');
-    if (isMoto) {
-        ctx.fillStyle = '#111'; ctx.fillRect(-14, -3, 10, 6); ctx.fillRect(11, -3, 10, 6);
-        ctx.fillStyle = v.color;
-        ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#111'; ctx.fillRect(-10, -4, 15, 8);
-    } else {
-        ctx.fillStyle = '#111';
-        let oy = 12; ctx.fillRect(-20, -oy - 3, 12, 6); ctx.fillRect(-20, oy - 3, 12, 6); 
-        ctx.fillRect(15, -oy - 3, 12, 6); ctx.fillRect(15, oy - 3, 12, 6); 
-        
-        ctx.fillStyle = v.color; 
-        ctx.fillRect(-30, -14, 60, 28); ctx.strokeRect(-30, -14, 60, 28);
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-15, -11, 30, 22); 
-        ctx.fillStyle = '#87CEEB'; ctx.fillRect(15, -10, 8, 20); ctx.fillRect(-21, -10, 6, 20); 
-    }
-    ctx.restore();
-}
-
-function drawMinimap() {
-    const MINI_SIZE = 130;
-    if (miniCanvas.width !== MINI_SIZE) { miniCanvas.width = MINI_SIZE; miniCanvas.height = MINI_SIZE; }
-    miniCtx.clearRect(0, 0, MINI_SIZE, MINI_SIZE); miniCtx.fillStyle = '#1a1a1a'; miniCtx.fillRect(0, 0, MINI_SIZE, MINI_SIZE);
-    miniCtx.save();
-    miniCtx.translate(MINI_SIZE / 2, MINI_SIZE / 2); const miniScale = 0.035; miniCtx.scale(miniScale, miniScale);
-    let me = serverState.players[myId];
-    miniCtx.translate(-me.x, -me.y);
-    let viewDist = (MINI_SIZE / 2) / miniScale; 
-    let startX = Math.floor((me.x - viewDist) / TILE_SIZE), endX = Math.ceil((me.x + viewDist) / TILE_SIZE);
-    let startY = Math.floor((me.y - viewDist) / TILE_SIZE), endY = Math.ceil((me.y + viewDist) / TILE_SIZE);
-
-    for (let y = startY; y <= endY; y++) {
-        for (let x = startX; x <= endX; x++) {
-            let type = getTileType(x, y);
-            if (type === TYPES.ROAD) { miniCtx.fillStyle = '#555'; } else if (type === TYPES.SIDEWALK) { miniCtx.fillStyle = '#888'; }
-            else if (type === TYPES.WATER) { miniCtx.fillStyle = '#2980b9'; } else if (type === TYPES.BUILDING) { miniCtx.fillStyle = '#333'; } 
-            else if (type === TYPES.TREE) { miniCtx.fillStyle = '#145a32'; } else if (type === TYPES.GRASS) { miniCtx.fillStyle = '#27ae60'; }
-            miniCtx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE+1, TILE_SIZE+1);
-        }
-    }
-    miniCtx.restore();
-    miniCtx.fillStyle = '#e74c3c'; miniCtx.beginPath(); miniCtx.arc(MINI_SIZE / 2, MINI_SIZE / 2, 4, 0, Math.PI * 2); miniCtx.fill();
-}
-
-// ==========================================
-// BUCLE DE RENDERIZADO PRINCIPAL
-// ==========================================
-function loop() {
-    requestAnimationFrame(loop);
-    if (!serverState || !myId) return;
-
-    let me = serverState.players[myId];
-    if (me) {
-        let targetX = me.inVehicle ? serverState.vehicles.find(v => v.id === me.inVehicle).x : me.x;
-        let targetY = me.inVehicle ? serverState.vehicles.find(v => v.id === me.inVehicle).y : me.y;
-        camera.x += (targetX - camera.x) * 0.2;
-        camera.y += (targetY - camera.y) * 0.2;
-        document.getElementById('health-bar').style.width = Math.max(0, me.hp) + '%';
-    }
-
-    ctx.fillStyle = '#222'; ctx.fillRect(0, 0, width, height); ctx.save();
-    ctx.translate(width / 2, height / 2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
-
-    let viewW = width / camera.zoom; let viewH = height / camera.zoom;
-    let startTx = Math.floor((camera.x - viewW/2) / TILE_SIZE) - 1;
-    let endTx = Math.ceil((camera.x + viewW/2) / TILE_SIZE) + 1;
-    let startTy = Math.floor((camera.y - viewH/2) / TILE_SIZE) - 1;
-    let endTy = Math.ceil((camera.y + viewH/2) / TILE_SIZE) + 1;
-
-    // DIBUJAR ENTORNO ORIGINAL
-    for (let ty = startTy; ty <= endTy; ty++) {
-        for (let tx = startTx; tx <= endTx; tx++) {
-            let px = tx * TILE_SIZE, py = ty * TILE_SIZE;
-            let type = getTileType(tx, ty); 
-
-            if (type === TYPES.ROAD) {
-                let road = getRoadType(tx, ty); let isTown = isTownArea(tx, ty);
-                ctx.fillStyle = '#7f8c8d'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1); 
-                if (road === 'VERTICAL') {
-                    ctx.fillStyle = '#ecf0f1'; for(let i=10; i<TILE_SIZE; i+=30) ctx.fillRect(px+TILE_SIZE/2-2, py+i, 4, 15); 
-                    if (isTown) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; for(let i=0; i<TILE_SIZE; i+=20) { ctx.fillRect(px+50-1, py+i, 2, 10); ctx.fillRect(px+150-1, py+i, 2, 10); } }
-                } else if (road === 'HORIZONTAL') {
-                    ctx.fillStyle = '#ecf0f1'; for(let i=10; i<TILE_SIZE; i+=30) ctx.fillRect(px+i, py+TILE_SIZE/2-2, 15, 4); 
-                    if (isTown) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; for(let i=0; i<TILE_SIZE; i+=20) { ctx.fillRect(px+i, py+50-1, 10, 2); ctx.fillRect(px+i, py+150-1, 10, 2); } }
+    for(let r = startRadius; r < startRadius + 40; r++) {
+        for(let tries = 0; tries < 25; tries++) {
+            let ang = Math.random() * Math.PI * 2;
+            let testX = tx + Math.floor(Math.cos(ang) * r);
+            let testY = ty + Math.floor(Math.sin(ang) * r);
+            
+            if (getTileType(testX, testY) === TYPES.SIDEWALK) {
+                let offX = 0, offY = 0;
+                if (getTileType(testX+1, testY) === TYPES.BUILDING) offX = 85;
+                else if (getTileType(testX-1, testY) === TYPES.BUILDING) offX = -85;
+                else if (getTileType(testX, testY+1) === TYPES.BUILDING) offY = 85;
+                else if (getTileType(testX, testY-1) === TYPES.BUILDING) offY = -85;
+                
+                if (offX !== 0 || offY !== 0) {
+                    return { x: testX * TILE_SIZE + TILE_SIZE/2 + offX, y: testY * TILE_SIZE + TILE_SIZE/2 + offY };
                 }
-            } else if (type === TYPES.SIDEWALK) {
-                ctx.fillStyle = '#bdc3c7'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
-                ctx.strokeStyle = '#95a5a6'; ctx.lineWidth = 4; ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-                ctx.beginPath(); ctx.moveTo(px + TILE_SIZE/2, py); ctx.lineTo(px + TILE_SIZE/2, py + TILE_SIZE);
-                ctx.moveTo(px, py + TILE_SIZE/2); ctx.lineTo(px + TILE_SIZE, py + TILE_SIZE/2); ctx.stroke();
-            } else if (type === TYPES.BUILDING) {
-                let bColor = BUILDING_COLORS[Math.floor(Math.abs(Math.sin(tx * 1.23 + ty * 3.21) * 100)) % BUILDING_COLORS.length];
-                ctx.fillStyle = bColor; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1); 
-                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px+15, py+15, TILE_SIZE-20, TILE_SIZE-20);
-                ctx.fillStyle = bColor; ctx.fillRect(px+10, py+10, TILE_SIZE-20, TILE_SIZE-20);
-                ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.strokeRect(px+10, py+10, TILE_SIZE-20, TILE_SIZE-20);
-            } else if (type === TYPES.WATER) {
-                ctx.fillStyle = '#2980b9'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
-                let wOff = Math.sin(Date.now() * 0.002 + tx + ty) * 10;
-                ctx.fillStyle = '#3498db'; ctx.fillRect(px+30 + wOff, py+30, 80, 10); ctx.fillRect(px+90 - wOff, py+80, 60, 10);
-            } else if (type === TYPES.TREE) {
-                ctx.fillStyle = isTownArea(tx,ty) ? '#bdc3c7' : '#27ae60'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
-                ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(px+105, py+105, 55, 0, Math.PI*2); ctx.fill(); 
-            } else if (type === TYPES.GRASS) {
-                ctx.fillStyle = '#27ae60'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
             }
         }
     }
-
-    // DIBUJAR VEHICULOS Y JUGADORES
-    for (let v of serverState.vehicles) drawVehicle(ctx, v);
-    for (let id in serverState.players) drawPlayer(ctx, serverState.players[id], id === myId);
-
-    // DIBUJAR COPAS DE LOS ARBOLES POR ENCIMA
-    for (let ty = startTy; ty <= endTy; ty++) {
-        for (let tx = startTx; tx <= endTx; tx++) {
-            if (getTileType(tx, ty) === TYPES.TREE) {
-                let px = tx * TILE_SIZE, py = ty * TILE_SIZE;
-                ctx.fillStyle = '#1e8449'; ctx.beginPath(); ctx.arc(px+100, py+100, 50, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(px+100, py+100, 30, 0, Math.PI*2); ctx.fill();
-            }
-        }
-    }
-
-    ctx.restore();
-    if(me) drawMinimap();
+    return { x: cx, y: cy }; 
 }
 
-requestAnimationFrame(loop);
-</script>
-</body>
-</html>
+function findCampoPoint(cx, cy, minRadiusPx = 0, preferredType = TYPES.GRASS) {
+    let tx = Math.floor(cx / TILE_SIZE);
+    let ty = Math.floor(cy / TILE_SIZE);
+    let startRadius = Math.max(1, Math.floor(minRadiusPx / TILE_SIZE));
+    
+    for(let r = startRadius; r < startRadius + 40; r++) {
+        for(let tries = 0; tries < 25; tries++) {
+            let ang = Math.random() * Math.PI * 2;
+            let testX = tx + Math.floor(Math.cos(ang) * r);
+            let testY = ty + Math.floor(Math.sin(ang) * r);
+            
+            if (!isTownArea(testX, testY) && getTileType(testX, testY) === preferredType) {
+                let rX = (Math.random() - 0.5) * 100;
+                let rY = (Math.random() - 0.5) * 100;
+                return { x: testX * TILE_SIZE + TILE_SIZE/2 + rX, y: testY * TILE_SIZE + TILE_SIZE/2 + rY };
+            }
+        }
+    }
+    return { x: cx, y: cy };
+}
+
+function findNearestRoad(cx, cy) {
+    let tx = Math.floor(cx / TILE_SIZE);
+    let ty = Math.floor(cy / TILE_SIZE);
+    for(let r = 1; r < 20; r++) {
+        for(let tries = 0; tries < 15; tries++) {
+            let ang = Math.random() * Math.PI * 2;
+            let testX = tx + Math.floor(Math.cos(ang) * r);
+            let testY = ty + Math.floor(Math.sin(ang) * r);
+            if (getTileType(testX, testY) === TYPES.ROAD) {
+                return { x: testX * TILE_SIZE + TILE_SIZE/2, y: testY * TILE_SIZE + TILE_SIZE/2 };
+            }
+        }
+    }
+    return { x: cx + TILE_SIZE*2, y: cy }; 
+}
+
+function getSafeParkingCoords(cx, cy) {
+    let tx = Math.floor(cx / TILE_SIZE);
+    let ty = Math.floor(cy / TILE_SIZE);
+    for(let r = 1; r < 20; r++) {
+        for(let tries = 0; tries < 20; tries++) {
+            let ang = Math.random() * Math.PI * 2;
+            let testX = tx + Math.floor(Math.cos(ang) * r);
+            let testY = ty + Math.floor(Math.sin(ang) * r);
+            let roadType = getRoadType(testX, testY);
+            
+            if (roadType === 'HORIZONTAL') {
+                let goRight = Math.random() < 0.5;
+                return { x: testX * TILE_SIZE + TILE_SIZE/2, y: testY * TILE_SIZE + (goRight ? 175 : 25), angle: goRight ? 0 : Math.PI };
+            } else if (roadType === 'VERTICAL') {
+                let goDown = Math.random() < 0.5;
+                return { x: testX * TILE_SIZE + (goDown ? 25 : 175), y: testY * TILE_SIZE + TILE_SIZE/2, angle: goDown ? Math.PI/2 : -Math.PI/2 };
+            }
+        }
+    }
+    return { x: cx + 60, y: cy + 60, angle: 0 };
+}
+
+function findSafeSpawn(baseX, baseY) {
+    let cx = Math.floor(baseX / TILE_SIZE); let cy = Math.floor(baseY / TILE_SIZE);
+    for(let r = 0; r < 100; r++) {
+        for(let ty = cy - r; ty <= cy + r; ty++) {
+            for(let tx = cx - r; tx <= cx + r; tx++) {
+                if (isTownArea(tx, ty) && getTileType(tx, ty) === TYPES.SIDEWALK) return { x: tx * TILE_SIZE + TILE_SIZE/2, y: ty * TILE_SIZE + TILE_SIZE/2 };
+            }
+        }
+    }
+    return { x: 12 * TILE_SIZE, y: 12 * TILE_SIZE };
+}
+
+function generateJobHQs() {
+    let i = 1;
+    for(let job of JOBS) {
+        if (job.id === 'farmer' || job.id === 'lumberjack') {
+            let hqTile = findCampoPoint(i * 4000, i * 4000, 0, job.id === 'farmer' ? TYPES.GRASS : TYPES.TREE);
+            let hqTx = Math.floor(hqTile.x / TILE_SIZE);
+            let hqTy = Math.floor(hqTile.y / TILE_SIZE);
+            HQ_OVERRIDES[hqTx + ',' + (hqTy - 1)] = TYPES.BUILDING;
+            job.hq = { x: hqTx * TILE_SIZE + TILE_SIZE/2, y: hqTy * TILE_SIZE + TILE_SIZE/2 - 85 };
+        } else {
+            job.hq = findBuildingEntrance(i * 4000, i * 4000, 0);
+        }
+        i++;
+    }
+    Game.jobAgencyLoc = findBuildingEntrance(2000, 2000, 0);
+}
+
+function getTaskLocation(jobId, x, y) {
+    if (jobId === 'farmer') return findCampoPoint(x, y, 1000, TYPES.GRASS);
+    if (jobId === 'lumberjack') return findCampoPoint(x, y, 1000, TYPES.TREE);
+    if (jobId === 'pizza' || jobId === 'cleaner') return findBuildingEntrance(x, y, 4000);
+    return findBuildingEntrance(x, y, 1000);
+}
+
+function collideWithWalls(ent, dt) {
+    let isVeh = ent instanceof Vehicle;
+    let boxes = isVeh ? ent.getHitboxes() : [{ x: ent.x, y: ent.y, r: ent.radius }];
+    let collided = false;
+    for (let box of boxes) {
+        let tx = Math.floor(box.x / TILE_SIZE); let ty = Math.floor(box.y / TILE_SIZE);
+        for(let y = ty - 1; y <= ty + 1; y++) {
+            for(let x = tx - 1; x <= tx + 1; x++) {
+                let type = getTileType(x, y);
+                if (type === TYPES.BUILDING || type === TYPES.WATER) {
+                    let tL = x * TILE_SIZE, tR = tL + TILE_SIZE;
+                    let tT = y * TILE_SIZE, tB = tT + TILE_SIZE;
+                    let testX = box.x; let testY = box.y;
+                    if (box.x < tL) testX = tL; else if (box.x > tR) testX = tR;
+                    if (box.y < tT) testY = tT; else if (box.y > tB) testY = tB;
+                    let distX = box.x - testX, distY = box.y - testY;
+                    let distance = Math.hypot(distX, distY);
+                    if (distance === 0) { distX = 1; distance = 1; }
+                    if (distance < box.r) {
+                        let push = box.r - distance; let nx = distX / distance; let ny = distY / distance;
+                        ent.x += nx * push; ent.y += ny * push; box.x += nx * push; box.y += ny * push;
+                        collided = true;
+                        if (isVeh && Math.abs(ent.speed) > 50) {
+                            let dmg = Math.abs(ent.speed) * 0.2 * dt; ent.hp -= dmg;
+                            ent.addDent(box.x - nx * box.r, box.y - ny * box.r, dmg * 5);
+                            ent.speed *= 0.9; if (ent.hp <= 0) ent.isBroken = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// CLASES DE ENTIDADES
+// ==========================================
+class Entity {
+    constructor(x, y, radius) {
+        this.x = x; this.y = y; this.radius = radius;
+        this.vx = 0; this.vy = 0; this.angle = 0;
+        this.active = true; this.hp = 100;
+    }
+    update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; }
+}
+
+class Person extends Entity {
+    constructor(x, y, isPlayer = false) {
+        super(x, y, 11.5); 
+        this.isPlayer = isPlayer; 
+        this.speed = 100;
+        this.color = isPlayer ? '#3498db' : '#95a5a6';
+        this.state = 'wander'; this.timer = Math.random() * 2;
+        this.isPolice = false; this.inVehicle = null;
+        this.enteringVehicle = null; this.enterTimer = 0; 
+        this.hasWeapon = isPlayer ? false : true; 
+        this.stamina = 100; this.maxStamina = 100; this.exhausted = false; 
+        
+        if (isPlayer) {
+            this.money = 0; this.jobLevel = 1; this.jobXp = 0;
+            this.isWorking = false; this.workTimer = 0;
+            this.currentJob = null; this.jobState = 'NONE';
+            this.targetLoc = null; this.jobData = {};
+        }
+
+        if (!isPlayer) Game.npcs.push(this);
+    }
+    
+    update(dt) {
+        if (!this.active) return;
+
+        if (this.isPlayer && this.inVehicle) {
+            this.x = this.inVehicle.x;
+            this.y = this.inVehicle.y;
+        }
+
+        // ---- LÓGICA DE SISTEMA DE TRABAJO (MISIONES Y GPS) ----
+        if (this.isPlayer && this.isWorking) {
+            this.workTimer -= dt;
+            let totalTime = this.currentJob.time;
+            let pct = 1 - (this.workTimer / totalTime);
+            document.getElementById('working-bar').style.width = (pct * 100) + '%';
+            
+            if (this.workTimer <= 0) {
+                this.isWorking = false;
+                document.getElementById('working-overlay').style.display = 'none';
+                
+                this.money += this.currentJob.pay;
+                this.jobXp += this.currentJob.xp;
+                if (this.jobLevel < 5 && this.jobXp >= XP_REQ[this.jobLevel]) this.jobLevel++;
+                
+                this.jobData.tasksDone++;
+                if (this.jobData.tasksDone >= 5) {
+                    this.jobState = 'GO_TO_HQ';
+                    this.targetLoc = this.currentJob.hq;
+                } else {
+                    this.jobState = 'GO_TO_TASK';
+                    this.targetLoc = getTaskLocation(this.currentJob.id, this.x, this.y);
+                }
+            }
+            this.vx = 0; this.vy = 0; 
+            if (!this.inVehicle) super.update(dt);
+            return; 
+        }
+
+        if (this.isPlayer && this.currentJob && !this.isWorking) {
+            let dist = this.targetLoc ? Math.hypot(this.targetLoc.x - this.x, this.targetLoc.y - this.y) : 9999;
+            
+            if (this.jobState !== 'GO_TO_HQ' && this.jobData.vehicle && this.jobData.vehicle.isBroken) {
+                this.currentJob = null; this.jobState = 'NONE'; this.targetLoc = null;
+            } else {
+                if (this.jobState === 'GO_TO_HQ' && dist < 45 && !this.inVehicle) {
+                    let pCoords = getSafeParkingCoords(this.x, this.y);
+                    if (!this.jobData.vehicle || this.jobData.vehicle.isBroken) {
+                        let v = new Vehicle(pCoords.x, pCoords.y, this.currentJob.vType);
+                        v.color = this.currentJob.vColor;
+                        v.angle = pCoords.angle;
+                        v.isParked = true; v.speed = 0;
+                        this.jobData.vehicle = v;
+                    } else {
+                        this.jobData.vehicle.x = pCoords.x;
+                        this.jobData.vehicle.y = pCoords.y;
+                        this.jobData.vehicle.angle = pCoords.angle;
+                        this.jobData.vehicle.speed = 0;
+                        this.jobData.vehicle.vx = 0;
+                        this.jobData.vehicle.vy = 0;
+                    }
+                    
+                    this.inVehicle = this.jobData.vehicle;
+                    this.inVehicle.isParked = false;
+                    this.inVehicle.locked = false;
+                    this.x = this.inVehicle.x;
+                    this.y = this.inVehicle.y;
+
+                    this.jobData.tasksDone = 0;
+                    this.jobState = 'GO_TO_TASK';
+                    this.targetLoc = getTaskLocation(this.currentJob.id, this.x, this.y);
+                }
+                else if (this.jobState === 'GO_TO_TASK' && dist < 45 && !this.inVehicle) {
+                    this.isWorking = true;
+                    this.workTimer = this.currentJob.time; 
+                    document.getElementById('working-overlay').style.display = 'block';
+                    document.getElementById('working-title').innerText = `Trabajando de ${this.currentJob.name}...`;
+                    document.getElementById('working-bar').style.width = '0%';
+                }
+            }
+        }
+
+        if (this.enterTimer > 0) {
+            this.enterTimer -= dt;
+            if (this.enterTimer <= 0 && this.enteringVehicle) {
+                if (this.enteringVehicle.active && !this.enteringVehicle.isBroken) {
+                    this.inVehicle = this.enteringVehicle;
+                    this.inVehicle.speed = 0;
+                    this.inVehicle.isParked = false;
+                    this.inVehicle.locked = false; 
+                }
+                this.enteringVehicle = null;
+            }
+            return;
+        }
+
+        if (this.isPlayer) {
+            if (this.inVehicle) {
+                if (this.stamina < this.maxStamina) { this.stamina += 20 * dt; if (this.stamina > this.maxStamina) this.stamina = this.maxStamina; }
+                if (this.stamina > 20) this.exhausted = false;
+                return; 
+            }
+            let moveX = 0, moveY = 0;
+            if (Game.keys['ArrowLeft'] || Game.keys['a']) moveX -= 1;
+            if (Game.keys['ArrowRight'] || Game.keys['d']) moveX += 1;
+            if (Game.keys['ArrowUp'] || Game.keys['w']) moveY -= 1;
+            if (Game
