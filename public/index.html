@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro City - Mundo Asimétrico y Curvas (MMO)</title>
+    <title>Retro City - Mundo Asimétrico y Curvas</title>
     <style>
         * { box-sizing: border-box; }
         body, html {
@@ -140,8 +140,6 @@
 
         @media (hover: hover) and (pointer: fine) { .touch-zone, .joystick-base, #dpad { display: none !important; } }
     </style>
-    
-    <!-- LIBRERIA MULTIJUGADOR -->
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -254,7 +252,7 @@ const Game = {
 };
 
 // ==========================================
-// MAPA Y NAVEGACIÓN
+// MAPA Y NAVEGACIÓN (DETERMINISTA PARA MULTIJUGADOR)
 // ==========================================
 function isTownArea(tx, ty) {
     let rx = Math.floor(tx / 64), ry = Math.floor(ty / 64);
@@ -308,7 +306,7 @@ function findBuildingEntrance(cx, cy, minRadiusPx = 0) {
     
     for(let r = startRadius; r < startRadius + 40; r++) {
         for(let tries = 0; tries < 25; tries++) {
-            let ang = Math.random() * Math.PI * 2;
+            let ang = (tries * 137.5) * (Math.PI / 180); // CÁLCULO DETERMINISTA
             let testX = tx + Math.floor(Math.cos(ang) * r);
             let testY = ty + Math.floor(Math.sin(ang) * r);
             
@@ -335,13 +333,13 @@ function findCampoPoint(cx, cy, minRadiusPx = 0, preferredType = TYPES.GRASS) {
     
     for(let r = startRadius; r < startRadius + 40; r++) {
         for(let tries = 0; tries < 25; tries++) {
-            let ang = Math.random() * Math.PI * 2;
+            let ang = (tries * 137.5) * (Math.PI / 180); // CÁLCULO DETERMINISTA
             let testX = tx + Math.floor(Math.cos(ang) * r);
             let testY = ty + Math.floor(Math.sin(ang) * r);
             
             if (!isTownArea(testX, testY) && getTileType(testX, testY) === preferredType) {
-                let rX = (Math.random() - 0.5) * 100;
-                let rY = (Math.random() - 0.5) * 100;
+                let rX = (Math.sin(testX * 1.23) - 0.5) * 100;
+                let rY = (Math.cos(testY * 3.21) - 0.5) * 100;
                 return { x: testX * TILE_SIZE + TILE_SIZE/2 + rX, y: testY * TILE_SIZE + TILE_SIZE/2 + rY };
             }
         }
@@ -354,7 +352,7 @@ function findNearestRoad(cx, cy) {
     let ty = Math.floor(cy / TILE_SIZE);
     for(let r = 1; r < 20; r++) {
         for(let tries = 0; tries < 15; tries++) {
-            let ang = Math.random() * Math.PI * 2;
+            let ang = (tries * 137.5) * (Math.PI / 180);
             let testX = tx + Math.floor(Math.cos(ang) * r);
             let testY = ty + Math.floor(Math.sin(ang) * r);
             if (getTileType(testX, testY) === TYPES.ROAD) {
@@ -370,16 +368,16 @@ function getSafeParkingCoords(cx, cy) {
     let ty = Math.floor(cy / TILE_SIZE);
     for(let r = 1; r < 20; r++) {
         for(let tries = 0; tries < 20; tries++) {
-            let ang = Math.random() * Math.PI * 2;
+            let ang = (tries * 137.5) * (Math.PI / 180);
             let testX = tx + Math.floor(Math.cos(ang) * r);
             let testY = ty + Math.floor(Math.sin(ang) * r);
             let roadType = getRoadType(testX, testY);
             
             if (roadType === 'HORIZONTAL') {
-                let goRight = Math.random() < 0.5;
+                let goRight = (testX % 2 === 0);
                 return { x: testX * TILE_SIZE + TILE_SIZE/2, y: testY * TILE_SIZE + (goRight ? 175 : 25), angle: goRight ? 0 : Math.PI };
             } else if (roadType === 'VERTICAL') {
-                let goDown = Math.random() < 0.5;
+                let goDown = (testY % 2 === 0);
                 return { x: testX * TILE_SIZE + (goDown ? 25 : 175), y: testY * TILE_SIZE + TILE_SIZE/2, angle: goDown ? Math.PI/2 : -Math.PI/2 };
             }
         }
@@ -458,10 +456,11 @@ function collideWithWalls(ent, dt) {
 }
 
 // ==========================================
-// CLASES DE ENTIDADES
+// CLASES DE ENTIDADES CON IDs
 // ==========================================
 class Entity {
-    constructor(x, y, radius) {
+    constructor(x, y, radius, id=null) {
+        this.id = id || Math.random().toString(36).substr(2, 9);
         this.x = x; this.y = y; this.radius = radius;
         this.vx = 0; this.vy = 0; this.angle = 0;
         this.active = true; this.hp = 100;
@@ -470,8 +469,8 @@ class Entity {
 }
 
 class Person extends Entity {
-    constructor(x, y, isPlayer = false) {
-        super(x, y, 11.5); 
+    constructor(x, y, isPlayer = false, id=null) {
+        super(x, y, 11.5, id); 
         this.isPlayer = isPlayer; 
         this.speed = 100;
         this.color = isPlayer ? '#3498db' : '#95a5a6';
@@ -499,7 +498,6 @@ class Person extends Entity {
             this.y = this.inVehicle.y;
         }
 
-        // ---- LÓGICA DE SISTEMA DE TRABAJO (MISIONES Y GPS) ----
         if (this.isPlayer && this.isWorking) {
             this.workTimer -= dt;
             let totalTime = this.currentJob.time;
@@ -611,7 +609,7 @@ class Person extends Entity {
             if (len > 1) { moveX /= len; moveY /= len; }
             this.vx = moveX * this.speed; this.vy = moveY * this.speed;
             if (len > 0.1) this.angle = Math.atan2(moveY, moveX);
-        } else {
+        } else if (isHost) { // SOLO EL HOST MUEVE A LOS PEATONES
             this.timer -= dt;
             if (this.isPolice) {
                 if (Game.wantedLevel > 0) {
@@ -697,12 +695,9 @@ class Person extends Entity {
     }
 }
 
-// ==========================================
-// VEHÍCULOS 
-// ==========================================
 class Vehicle extends Entity {
-    constructor(x, y, vType) {
-        super(x, y, 30); 
+    constructor(x, y, vType, id=null) {
+        super(x, y, 30, id); 
         let def = VEHICLE_DEFS[vType];
         this.vType = vType; this.width = def.w; this.height = def.h; 
         this.maxSpeed = def.maxSpeed; this.accel = def.accel; 
@@ -757,7 +752,8 @@ class Vehicle extends Entity {
             if (Game.keys['ArrowRight'] || Game.keys['d'] || Game.joystick.x > 0.3) inputSteer = 1;
         }
 
-        if (this.aiDriving) {
+        // SOLO EL HOST CALCULA LA IA DEL TRÁFICO
+        if (this.aiDriving && isHost) {
             let shouldBrake = false;
             let tileX = Math.floor(this.x / TILE_SIZE) * TILE_SIZE; let tileY = Math.floor(this.y / TILE_SIZE) * TILE_SIZE;
             let cx = tileX + TILE_SIZE/2; let cy = tileY + TILE_SIZE/2;
@@ -814,7 +810,7 @@ class Vehicle extends Entity {
             }
             this.wheelAngle = 0; 
             
-        } else {
+        } else if (!this.aiDriving) {
             let steerSpeed = (1.0 / 3.0) * dt; 
             if (inputSteer !== 0) {
                 this.wheelAngle += inputSteer * steerSpeed;
@@ -1205,6 +1201,9 @@ function toggleVehicle() {
             if (d < minDist) { minDist = d; closest = v; }
         }
         if (closest) { 
+            // AVISAR A LA RED QUE ROBÉ ESTE COCHE
+            if(socket) socket.emit('claimVehicle', closest.id);
+            
             if (closest.locked) {
                 Game.player.enteringVehicle = closest;
                 Game.player.enterTimer = 0.8; 
@@ -1240,9 +1239,11 @@ document.getElementById('btn-shoot').addEventListener('touchstart', e=>{e.preven
 document.getElementById('btn-action').addEventListener('touchstart', e=>{e.preventDefault(); handleAction();}, {passive: false});
 
 // ==========================================
-// SPAWN DE MUNDO
+// SPAWN DE MUNDO (SÓLO EL HOST CREA EL TRÁFICO)
 // ==========================================
 function manageSpawning() {
+    if (!isHost) return; // LOS CLIENTES NORMALES NO CREAN COCHES
+
     let viewW = width / Game.camera.zoom; let viewH = height / Game.camera.zoom;
     let maxVisibleRadius = Math.hypot(viewW/2, viewH/2);
     let safeRadius = maxVisibleRadius + 200; 
@@ -1308,11 +1309,12 @@ function manageSpawning() {
 }
 
 // ==========================================
-// BUCLE PRINCIPAL MULTIJUGADOR INYECTADO
+// RED MMO (LÓGICA INYECTADA)
 // ==========================================
 let socket = null;
 let myId = null;
 let onlinePlayers = {};
+let isHost = false;
 
 function update(dt) {
     if (Game.player.hp <= 0) {
@@ -1418,18 +1420,28 @@ function update(dt) {
     document.getElementById('wanted-stars').innerText = '★'.repeat(Math.max(0, Math.floor(Game.wantedLevel)));
     document.getElementById('damage-overlay').style.boxShadow = Game.player.hp < 40 ? `inset 0 0 100px rgba(255,0,0,${Math.sin(Date.now()*0.005) * 0.5 + 0.2})` : 'inset 0 0 100px rgba(255,0,0,0)';
 
-    // ENVIAR POSICION AL SERVIDOR
+    // ENVIAR POSICION DEL JUGADOR
     if (socket && Game.player) {
         socket.emit('playerState', {
-            x: Game.player.x,
-            y: Game.player.y,
+            x: Game.player.x, y: Game.player.y,
             angle: Game.player.inVehicle ? Game.player.inVehicle.angle : Game.player.angle,
-            hp: Game.player.hp,
-            inVehicle: !!Game.player.inVehicle,
+            hp: Game.player.hp, inVehicle: !!Game.player.inVehicle,
             vType: Game.player.inVehicle ? Game.player.inVehicle.vType : null,
             vColor: Game.player.inVehicle ? Game.player.inVehicle.color : null,
             isBroken: Game.player.inVehicle ? Game.player.inVehicle.isBroken : false
         });
+        
+        // SI SOY EL HOST, ENVÍO EL TRÁFICO A LOS DEMÁS
+        if (isHost) {
+            let tVehicles = Game.vehicles.filter(v => v.aiDriving || v.isParked).map(v => ({
+                id: v.id, x: v.x, y: v.y, angle: v.angle, speed: v.speed, vType: v.vType, 
+                color: v.color, isBroken: v.isBroken, aiDriving: v.aiDriving, isParked: v.isParked
+            }));
+            let tNpcs = Game.npcs.map(n => ({
+                id: n.id, x: n.x, y: n.y, angle: n.angle, color: n.color, isPolice: n.isPolice
+            }));
+            socket.emit('trafficState', { vehicles: tVehicles, npcs: tNpcs });
+        }
     }
 }
 
@@ -1514,14 +1526,13 @@ function draw() {
     for(let i=0; i<Game.npcs.length; i++) if(Game.npcs[i].active) renderList.push(Game.npcs[i]);
     for(let i=0; i<Game.vehicles.length; i++) if(Game.vehicles[i].active) renderList.push(Game.vehicles[i]);
     
-    // INYECTAR LOS JUGADORES EN LÍNEA A LA LISTA DE DIBUJADO
+    // RENDERIZAR OTROS JUGADORES EN LÍNEA
     if (typeof onlinePlayers !== 'undefined' && myId) {
         for (let id in onlinePlayers) {
             if (id === myId) continue;
             let p = onlinePlayers[id];
             if (!p.x) continue;
 
-            // Creamos un objeto falso que engaña a tu código original para dibujarlo
             let netEnt = {
                 x: p.x, y: p.y, angle: p.angle, hp: p.hp,
                 drawShadow: function(ctx) {
@@ -1531,16 +1542,13 @@ function draw() {
                         let def = VEHICLE_DEFS[p.vType] || {w:60, h:28};
                         if (p.vType === 'MOTO') ctx.fillRect(-def.w/2, -6, def.w, 12);
                         else ctx.fillRect(-def.w/2, -def.h/2, def.w, def.h);
-                    } else {
-                        ctx.beginPath(); ctx.arc(-1, -1, 12, 0, Math.PI*2); ctx.fill();
-                    }
+                    } else { ctx.beginPath(); ctx.arc(-1, -1, 12, 0, Math.PI*2); ctx.fill(); }
                     ctx.restore();
                 },
                 draw: function(ctx) {
                     ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
                     if (p.inVehicle) {
-                        let def = VEHICLE_DEFS[p.vType] || {w:60, h:28};
-                        let w = def.w, h = def.h;
+                        let def = VEHICLE_DEFS[p.vType] || {w:60, h:28}; let w = def.w, h = def.h;
                         ctx.lineWidth = 2; ctx.strokeStyle = '#111';
                         if (p.vType === 'MOTO') {
                             ctx.fillStyle = '#111'; ctx.fillRect(-w/2+2, -3, 10, 6); ctx.fillRect(w/2-5, -3, 10, 6);
@@ -1554,18 +1562,14 @@ function draw() {
                             ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-w/4, -h/2+3, w/2, h-6);
                         }
                     } else {
-                        ctx.scale(0.75, 0.75);
-                        ctx.lineWidth = 1.5; ctx.strokeStyle = '#111';
-                        // COLOR NARANJA PARA SABER QUE ES UN JUGADOR REAL
+                        ctx.scale(0.75, 0.75); ctx.lineWidth = 1.5; ctx.strokeStyle = '#111';
                         ctx.fillStyle = '#e67e22'; 
                         ctx.beginPath(); ctx.fillRect(-10, -15, 20, 30); ctx.strokeRect(-10, -15, 20, 30);
                         ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                         ctx.beginPath(); ctx.arc(10, 15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                         ctx.beginPath(); ctx.arc(10, -15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                     }
-                    // Nombre encima del jugador online
-                    ctx.rotate(-this.angle);
-                    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center';
+                    ctx.rotate(-this.angle); ctx.fillStyle = '#e67e22'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center';
                     ctx.fillText("Online", 0, p.inVehicle ? -30 : -20);
                     ctx.restore();
                 }
@@ -1575,7 +1579,6 @@ function draw() {
     }
 
     for(let ent of renderList) if (ent.drawShadow) ent.drawShadow(ctx);
-    
     renderList.sort((a, b) => a.y - b.y);
     for(let ent of renderList) ent.draw(ctx);
     
@@ -1645,7 +1648,6 @@ function drawMinimap() {
     miniCtx.fillStyle = '#3498db'; 
     for(let i=0; i<Game.npcs.length; i++) if (Game.npcs[i].active && Game.npcs[i].isPolice) { miniCtx.beginPath(); miniCtx.arc(Game.npcs[i].x, Game.npcs[i].y, 100, 0, Math.PI * 2); miniCtx.fill(); }
     
-    // PUNTOS NARANJAS EN EL MINIMAPA PARA LOS JUGADORES
     if (typeof onlinePlayers !== 'undefined' && myId) {
         miniCtx.fillStyle = '#e67e22'; 
         for (let id in onlinePlayers) {
@@ -1681,7 +1683,6 @@ function loop(timestamp) {
     Game.lastTime = timestamp; update(dt); draw(); requestAnimationFrame(loop);
 }
 
-// CONEXIÓN SOCKET INYECTADA EN EL BOTÓN JUGAR
 document.getElementById('start-btn').addEventListener('click', () => {
     document.getElementById('start-screen').style.display = 'none';
     for(let i=0; i<30; i++) Game.bullets.push(new Bullet());
@@ -1692,10 +1693,57 @@ document.getElementById('start-btn').addEventListener('click', () => {
     Game.camera.x = Game.player.x; Game.camera.y = Game.player.y;
     Game.lastTime = performance.now(); requestAnimationFrame(loop);
 
-    // Arrancar la red
+    // =====================================
+    // CONEXION AL SERVIDOR AL DARLE A JUGAR
+    // =====================================
     socket = io();
     socket.on('connect', () => { myId = socket.id; });
-    socket.on('updateState', (state) => { onlinePlayers = state; });
+    
+    socket.on('hostStatus', status => { isHost = status; });
+    
+    socket.on('vehicleClaimed', vid => {
+        let v = Game.vehicles.find(veh => veh.id === vid);
+        if(v) { v.aiDriving = false; v.isParked = false; }
+    });
+
+    socket.on('updateState', (state) => { 
+        onlinePlayers = state.players; 
+        
+        // Si NO soy el host, copio los vehículos y peatones que me manda el host
+        if (!isHost && state.traffic && state.traffic.vehicles) {
+            
+            let sIds = state.traffic.vehicles.map(v => v.id);
+            for (let i = Game.vehicles.length - 1; i >= 0; i--) {
+                let v = Game.vehicles[i];
+                if ((v.aiDriving || v.isParked) && !sIds.includes(v.id)) Game.vehicles.splice(i, 1);
+            }
+            
+            for (let t of state.traffic.vehicles) {
+                let v = Game.vehicles.find(veh => veh.id === t.id);
+                if (!v) {
+                    v = new Vehicle(t.x, t.y, t.vType, t.id);
+                    v.color = t.color;
+                }
+                v.x = t.x; v.y = t.y; v.angle = t.angle; v.speed = t.speed; 
+                v.aiDriving = t.aiDriving; v.isParked = t.isParked; v.isBroken = t.isBroken;
+            }
+            
+            let nIds = state.traffic.npcs.map(n => n.id);
+            for (let i = Game.npcs.length - 1; i >= 0; i--) {
+                let n = Game.npcs[i];
+                if (!nIds.includes(n.id)) Game.npcs.splice(i, 1);
+            }
+            
+            for (let t of state.traffic.npcs) {
+                let n = Game.npcs.find(npc => npc.id === t.id);
+                if (!n) {
+                    n = new Person(t.x, t.y, false, t.id);
+                    n.color = t.color; n.isPolice = t.isPolice;
+                }
+                n.x = t.x; n.y = t.y; n.angle = t.angle;
+            }
+        }
+    });
 });
 </script>
 </body>
