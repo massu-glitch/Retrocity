@@ -5,39 +5,63 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Aquí guardamos dónde están los jugadores
 let players = {};
+let trafficData = { vehicles: [], npcs: [] };
+let hostId = null;
 
 io.on('connection', (socket) => {
     console.log('Jugador conectado:', socket.id);
-    
-    // Al conectarse, lo añadimos vacío
     players[socket.id] = {};
+    
+    // Si no hay nadie más, este jugador es el Host que controla el tráfico
+    if (!hostId) hostId = socket.id;
+    socket.emit('hostStatus', socket.id === hostId);
 
-    // Cuando un jugador se mueve, actualizamos su posición aquí
+    // Posición del jugador
     socket.on('playerState', (data) => {
         players[socket.id] = data;
     });
 
-    // Cuando se desconecta, lo borramos
+    // Posición del tráfico (Solo la envía el Host)
+    socket.on('trafficState', (data) => {
+        if (socket.id === hostId) {
+            trafficData = data;
+        }
+    });
+
+    // Si alguien roba un coche de la calle, avisar a todos
+    socket.on('claimVehicle', (vid) => {
+        io.emit('vehicleClaimed', vid);
+    });
+
     socket.on('disconnect', () => {
         console.log('Jugador desconectado:', socket.id);
         delete players[socket.id];
+        
+        // Si el Host se va, le pasamos el control del tráfico al siguiente
+        if (socket.id === hostId) {
+            let remaining = Object.keys(players);
+            if (remaining.length > 0) {
+                hostId = remaining[0];
+                io.to(hostId).emit('hostStatus', true);
+            } else {
+                hostId = null;
+                trafficData = { vehicles: [], npcs: [] };
+            }
+        }
     });
 });
 
-// Enviar las posiciones a todos 30 veces por segundo
+// Enviar estado a todos 30 veces por segundo
 setInterval(() => {
-    io.emit('updateState', players);
+    io.emit('updateState', { players, traffic: trafficData });
 }, 1000 / 30);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor de espejos corriendo en puerto ${PORT}`);
+    console.log(`Servidor MMO corriendo en puerto ${PORT}`);
 });
