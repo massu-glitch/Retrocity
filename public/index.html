@@ -4,89 +4,113 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Retro City - MMO</title>
-    <!-- MISMO CSS DEL CÓDIGO ORIGINAL -->
     <style>
+        /* === HE DEVUELTO TODO TU CSS ORIGINAL === */
         * { box-sizing: border-box; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #111; overflow: hidden; }
-        canvas { display: block; width: 100%; height: 100%; }
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        .action-btn {
-            position: absolute; width: 65px; height: 65px; bottom: 100px; right: 40px;
-            background: rgba(52, 152, 219, 0.4); border: 2px solid rgba(255,255,255,0.5);
-            border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; pointer-events: auto; cursor: pointer;
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #111; overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; user-select: none; -webkit-user-select: none;
         }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        #hud {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); color: #fff;
+            padding: 10px; border-radius: 8px; border: 2px solid #555;
+            text-align: right; pointer-events: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        .bar-container {
+            width: 150px; height: 15px; background: #333;
+            border-radius: 4px; overflow: hidden; margin-top: 5px; border: 1px solid #000;
+        }
+        #health-bar { width: 100%; height: 100%; background: #e74c3c; transition: width 0.2s; }
+        
+        #minimap-container {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 130px; height: 130px; border: 4px solid #444; border-radius: 50%;
+            overflow: hidden; background: #1a1a1a; opacity: 0.85; pointer-events: none; box-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        #minimap { width: 100%; height: 100%; }
+
+        .touch-zone { position: absolute; bottom: 0; width: 50%; height: 50%; pointer-events: auto; z-index: 20; }
+        #left-touch { left: 0; } #right-touch { right: 0; }
+        
+        .joystick-base {
+            position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px;
+            background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%; display: none; pointer-events: none;
+        }
+        .joystick-knob {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .action-btn {
+            position: absolute; width: 65px; height: 65px;
+            background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 50%; color: white; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; font-size: 11px; text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px #000; transition: background 0.2s;
+        }
+        .action-btn:active { transform: scale(0.95); }
+        #btn-action { bottom: 100px; right: 40px; background: rgba(52, 152, 219, 0.4); }
+
+        @media (hover: hover) and (pointer: fine) { .touch-zone, .joystick-base { display: none !important; } }
     </style>
 </head>
 <body>
+
     <canvas id="gameCanvas"></canvas>
+
     <div id="ui">
+        <div id="hud">
+            <div id="money-display" style="color: #2ecc71; font-weight: bold; font-size: 24px; margin-bottom: 5px; text-shadow: 1px 1px 2px #000;">MMO BETA</div>
+            <div class="bar-container"><div id="health-bar"></div></div>
+        </div>
+        <div id="minimap-container"><canvas id="minimap"></canvas></div>
+    </div>
+
+    <!-- Controles táctiles -->
+    <div class="touch-zone" id="left-touch">
+        <div class="joystick-base" id="joystick"><div class="joystick-knob" id="knob"></div></div>
+    </div>
+    <div class="touch-zone" id="right-touch">
         <div class="action-btn" id="btn-action">ENTRAR<br>SALIR</div>
     </div>
 
-    <!-- SOCKET.IO SCRIPT -->
     <script src="/socket.io/socket.io.js"></script>
 
 <script>
+// ==========================================
+// CONFIGURACIÓN INICIAL
+// ==========================================
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
+const miniCanvas = document.getElementById('minimap');
+const miniCtx = miniCanvas.getContext('2d');
+
 let width, height;
 function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize); resize();
 
-// ==========================================
-// CONSTANTES Y MAPA (DUPLICADO PARA DIBUJAR)
-// ==========================================
-const TILE_SIZE = 200;
-const TYPES = { GRASS: 0, ROAD: 1, BUILDING: 2, TREE: 3, SIDEWALK: 4, WATER: 5 };
-
-function isTownArea(tx, ty) {
-    let rx = Math.floor(tx / 64), ry = Math.floor(ty / 64);
-    let hash = Math.abs(Math.sin(rx * 12.9898 + ry * 78.233) * 43758.5453);
-    return (hash - Math.floor(hash)) > 0.65;
-}
-function getRoadType(tx, ty) {
-    let isTown = isTownArea(tx, ty);
-    let lx = ((tx % 28) + 28) % 28; let ly = ((ty % 28) + 28) % 28;
-    let isV = (lx === 0) || (isTown && (lx === 8 || lx === 18));
-    let isH = (ly === 0) || (isTown && (ly === 6 || ly === 14 || ly === 22));
-    if (isV && isH) return 'INTERSECTION';
-    if (isV) return 'VERTICAL';
-    if (isH) return 'HORIZONTAL';
-    return 'NONE';
-}
-function getTileType(tx, ty) {
-    let road = getRoadType(tx, ty);
-    if (road !== 'NONE') return TYPES.ROAD;
-    let isTown = isTownArea(tx, ty);
-    let hash = Math.abs(Math.sin(tx * 12.989 + ty * 78.233));
-    if (isTown) {
-        if (hash < 0.1) return TYPES.TREE;
-        if (hash < 0.2) return TYPES.SIDEWALK;
-        return TYPES.BUILDING;
-    } else { return hash < 0.08 ? TYPES.TREE : TYPES.GRASS; }
-}
-
-// ==========================================
-// CLIENTE MULTIJUGADOR
-// ==========================================
 const socket = io();
 let serverState = null;
 let myId = null;
 let camera = { x: 2000, y: 2000, zoom: 1.15 };
-
 let keys = { up: false, down: false, left: false, right: false };
 
 socket.on('connect', () => { myId = socket.id; });
+socket.on('stateUpdate', (newState) => { serverState = newState; });
 
-socket.on('stateUpdate', (newState) => {
-    serverState = newState;
-});
-
-// Enviar inputs al servidor
-function sendInput() {
-    socket.emit('input', keys);
-}
+// ==========================================
+// INPUTS Y CONTROLES
+// ==========================================
+function sendInput() { socket.emit('input', keys); }
 
 window.addEventListener('keydown', e => { 
     if(e.key === 'w' || e.key === 'ArrowUp') keys.up = true;
@@ -103,82 +127,247 @@ window.addEventListener('keyup', e => {
     if(e.key === 'd' || e.key === 'ArrowRight') keys.right = false;
     sendInput();
 });
+document.getElementById('btn-action').addEventListener('touchstart', e => { e.preventDefault(); socket.emit('action'); });
 document.getElementById('btn-action').addEventListener('click', () => socket.emit('action'));
 
+// Joystick Móvil
+const leftZ = document.getElementById('left-touch'), jBase = document.getElementById('joystick'), jKnob = document.getElementById('knob');
+let jId = null, jSX, jSY;
+leftZ.addEventListener('touchstart', e => {
+    e.preventDefault(); let t = e.changedTouches[0]; jId = t.identifier; jSX = t.clientX; jSY = t.clientY;
+    jBase.style.display = 'block'; jBase.style.left = (jSX-50)+'px'; jBase.style.top = (jSY-50)+'px';
+}, {passive: false});
+leftZ.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (let i=0; i<e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        if (t.identifier === jId) {
+            let dx = t.clientX - jSX, dy = t.clientY - jSY, dist = Math.hypot(dx,dy), max = 40;
+            if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
+            jKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            
+            // Simular teclado con joystick
+            keys.right = (dx/max) > 0.3; keys.left = (dx/max) < -0.3;
+            keys.down = (dy/max) > 0.3;  keys.up = (dy/max) < -0.3;
+            sendInput();
+        }
+    }
+}, {passive: false});
+const endJ = e => { 
+    e.preventDefault(); 
+    for(let i=0; i<e.changedTouches.length; i++) if(e.changedTouches[i].identifier===jId){
+        jId=null; jBase.style.display='none'; jKnob.style.transform=`translate(-50%,-50%)`;
+        keys.up=false; keys.down=false; keys.left=false; keys.right=false; sendInput();
+    } 
+};
+leftZ.addEventListener('touchend', endJ, {passive: false}); leftZ.addEventListener('touchcancel', endJ, {passive: false});
+
 // ==========================================
-// DIBUJO (RENDER LOOP)
+// MAPA Y TEXTURAS (TU CÓDIGO ORIGINAL)
+// ==========================================
+const TILE_SIZE = 200; 
+const TYPES = { GRASS: 0, ROAD: 1, BUILDING: 2, TREE: 3, SIDEWALK: 4, WATER: 5 };
+const BUILDING_COLORS = ['#2c3e50', '#8e44ad', '#d35400', '#c0392b', '#16a085', '#2c2c54'];
+
+function isTownArea(tx, ty) {
+    let rx = Math.floor(tx / 64), ry = Math.floor(ty / 64);
+    let hash = Math.abs(Math.sin(rx * 12.9898 + ry * 78.233) * 43758.5453);
+    return (hash - Math.floor(hash)) > 0.65; 
+}
+function getRoadType(tx, ty) {
+    let isTown = isTownArea(tx, ty);
+    let lx = ((tx % 28) + 28) % 28; let ly = ((ty % 28) + 28) % 28;
+    let isMainV = (lx === 0); let isMainH = (ly === 0);
+    let isWindingH = !isTown && (ly === 14) && (lx > 0 && lx <= 14);
+    let isWindingV = !isTown && (lx === 14) && (ly >= 14 && ly < 28);
+    let isTownV = isTown && (lx === 8 || lx === 18);
+    let isTownH = isTown && (ly === 6 || ly === 14 || ly === 22);
+    let isV = isMainV || isTownV || isWindingV;
+    let isH = isMainH || isTownH || isWindingH;
+    
+    if (isV && isH) return 'INTERSECTION';
+    if (isV) return 'VERTICAL';
+    if (isH) return 'HORIZONTAL';
+    return 'NONE';
+}
+function getTileType(tx, ty) {
+    let road = getRoadType(tx, ty);
+    if (road !== 'NONE') return TYPES.ROAD;
+    let isTown = isTownArea(tx, ty);
+    let hash = Math.abs(Math.sin(tx * 12.989 + ty * 78.233));
+    if (isTown) {
+        let nearRoad = getRoadType(tx+1, ty)!=='NONE' || getRoadType(tx-1, ty)!=='NONE' || getRoadType(tx, ty+1)!=='NONE' || getRoadType(tx, ty-1)!=='NONE';
+        if (nearRoad) return TYPES.SIDEWALK;
+        if (hash < 0.1) return TYPES.TREE;
+        if (hash < 0.2) return TYPES.SIDEWALK;
+        return TYPES.BUILDING;
+    } else {
+        let lakeNoise = Math.sin(tx/4) + Math.cos(ty/4) + Math.sin((tx+ty)/6);
+        if (lakeNoise > 1.4) return TYPES.WATER;
+        if (hash < 0.08) return TYPES.TREE; 
+        return TYPES.GRASS;
+    }
+}
+
+// ==========================================
+// DIBUJO DE ENTIDADES (TUS GRÁFICOS ORIGINALES)
 // ==========================================
 function drawPlayer(ctx, p, isMe) {
-    if (p.inVehicle) return; // No dibujar si está en coche
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(0.75, 0.75); ctx.rotate(p.angle);
-    ctx.fillStyle = isMe ? '#3498db' : '#95a5a6'; // Yo soy azul, los demás grises
+    if (p.inVehicle) return; 
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(0.75, 0.75); 
+    
+    // Sombra original
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(3, 5, 12, 0, Math.PI*2); ctx.fill();
+    
+    ctx.rotate(p.angle);
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#111';
+    
+    // Cuerpo y brazos originales
+    ctx.fillStyle = isMe ? '#3498db' : '#95a5a6'; 
     ctx.beginPath(); ctx.fillRect(-10, -15, 20, 30); ctx.strokeRect(-10, -15, 20, 30);
     ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(10, 15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(10, -15, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.restore();
 }
 
 function drawVehicle(ctx, v) {
     ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(v.angle);
-    ctx.fillStyle = v.color;
-    ctx.fillRect(-30, -14, 60, 28);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-15, -11, 30, 22);
+    
+    // Sombras originales
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    if (v.type === 'MOTO') ctx.fillRect(-16, -6, 32, 12);
+    else ctx.fillRect(-30, -14, 60, 28);
+    
+    ctx.lineWidth = 2; ctx.strokeStyle = '#111';
+
+    // Ruedas y carrocería
+    let isMoto = (v.type === 'MOTO');
+    if (isMoto) {
+        ctx.fillStyle = '#111'; ctx.fillRect(-14, -3, 10, 6); ctx.fillRect(11, -3, 10, 6);
+        ctx.fillStyle = v.color;
+        ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#111'; ctx.fillRect(-10, -4, 15, 8);
+    } else {
+        ctx.fillStyle = '#111';
+        let oy = 12; ctx.fillRect(-20, -oy - 3, 12, 6); ctx.fillRect(-20, oy - 3, 12, 6); 
+        ctx.fillRect(15, -oy - 3, 12, 6); ctx.fillRect(15, oy - 3, 12, 6); 
+        
+        ctx.fillStyle = v.color; 
+        ctx.fillRect(-30, -14, 60, 28); ctx.strokeRect(-30, -14, 60, 28);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-15, -11, 30, 22); 
+        ctx.fillStyle = '#87CEEB'; ctx.fillRect(15, -10, 8, 20); ctx.fillRect(-21, -10, 6, 20); 
+    }
     ctx.restore();
 }
 
+function drawMinimap() {
+    const MINI_SIZE = 130;
+    if (miniCanvas.width !== MINI_SIZE) { miniCanvas.width = MINI_SIZE; miniCanvas.height = MINI_SIZE; }
+    miniCtx.clearRect(0, 0, MINI_SIZE, MINI_SIZE); miniCtx.fillStyle = '#1a1a1a'; miniCtx.fillRect(0, 0, MINI_SIZE, MINI_SIZE);
+    miniCtx.save();
+    miniCtx.translate(MINI_SIZE / 2, MINI_SIZE / 2); const miniScale = 0.035; miniCtx.scale(miniScale, miniScale);
+    let me = serverState.players[myId];
+    miniCtx.translate(-me.x, -me.y);
+    let viewDist = (MINI_SIZE / 2) / miniScale; 
+    let startX = Math.floor((me.x - viewDist) / TILE_SIZE), endX = Math.ceil((me.x + viewDist) / TILE_SIZE);
+    let startY = Math.floor((me.y - viewDist) / TILE_SIZE), endY = Math.ceil((me.y + viewDist) / TILE_SIZE);
+
+    for (let y = startY; y <= endY; y++) {
+        for (let x = startX; x <= endX; x++) {
+            let type = getTileType(x, y);
+            if (type === TYPES.ROAD) { miniCtx.fillStyle = '#555'; } else if (type === TYPES.SIDEWALK) { miniCtx.fillStyle = '#888'; }
+            else if (type === TYPES.WATER) { miniCtx.fillStyle = '#2980b9'; } else if (type === TYPES.BUILDING) { miniCtx.fillStyle = '#333'; } 
+            else if (type === TYPES.TREE) { miniCtx.fillStyle = '#145a32'; } else if (type === TYPES.GRASS) { miniCtx.fillStyle = '#27ae60'; }
+            miniCtx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE+1, TILE_SIZE+1);
+        }
+    }
+    miniCtx.restore();
+    miniCtx.fillStyle = '#e74c3c'; miniCtx.beginPath(); miniCtx.arc(MINI_SIZE / 2, MINI_SIZE / 2, 4, 0, Math.PI * 2); miniCtx.fill();
+}
+
+// ==========================================
+// BUCLE DE RENDERIZADO PRINCIPAL
+// ==========================================
 function loop() {
     requestAnimationFrame(loop);
     if (!serverState || !myId) return;
 
     let me = serverState.players[myId];
     if (me) {
-        // Suavizar movimiento de cámara hacia el jugador
-        camera.x += (me.x - camera.x) * 0.1;
-        camera.y += (me.y - camera.y) * 0.1;
+        let targetX = me.inVehicle ? serverState.vehicles.find(v => v.id === me.inVehicle).x : me.x;
+        let targetY = me.inVehicle ? serverState.vehicles.find(v => v.id === me.inVehicle).y : me.y;
+        camera.x += (targetX - camera.x) * 0.2;
+        camera.y += (targetY - camera.y) * 0.2;
+        document.getElementById('health-bar').style.width = Math.max(0, me.hp) + '%';
     }
 
-    ctx.fillStyle = '#222'; ctx.fillRect(0, 0, width, height); 
-    ctx.save();
-    ctx.translate(width / 2, height / 2); 
-    ctx.scale(camera.zoom, camera.zoom); 
-    ctx.translate(-camera.x, -camera.y);
+    ctx.fillStyle = '#222'; ctx.fillRect(0, 0, width, height); ctx.save();
+    ctx.translate(width / 2, height / 2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
 
-    // Dibujar Suelo (Igual que el original)
     let viewW = width / camera.zoom; let viewH = height / camera.zoom;
-    let startTx = Math.floor((camera.x - viewW/2) / TILE_SIZE);
-    let endTx = Math.ceil((camera.x + viewW/2) / TILE_SIZE);
-    let startTy = Math.floor((camera.y - viewH/2) / TILE_SIZE);
-    let endTy = Math.ceil((camera.y + viewH/2) / TILE_SIZE);
+    let startTx = Math.floor((camera.x - viewW/2) / TILE_SIZE) - 1;
+    let endTx = Math.ceil((camera.x + viewW/2) / TILE_SIZE) + 1;
+    let startTy = Math.floor((camera.y - viewH/2) / TILE_SIZE) - 1;
+    let endTy = Math.ceil((camera.y + viewH/2) / TILE_SIZE) + 1;
 
+    // DIBUJAR ENTORNO ORIGINAL
     for (let ty = startTy; ty <= endTy; ty++) {
         for (let tx = startTx; tx <= endTx; tx++) {
             let px = tx * TILE_SIZE, py = ty * TILE_SIZE;
             let type = getTileType(tx, ty); 
 
             if (type === TYPES.ROAD) {
+                let road = getRoadType(tx, ty); let isTown = isTownArea(tx, ty);
                 ctx.fillStyle = '#7f8c8d'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1); 
+                if (road === 'VERTICAL') {
+                    ctx.fillStyle = '#ecf0f1'; for(let i=10; i<TILE_SIZE; i+=30) ctx.fillRect(px+TILE_SIZE/2-2, py+i, 4, 15); 
+                    if (isTown) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; for(let i=0; i<TILE_SIZE; i+=20) { ctx.fillRect(px+50-1, py+i, 2, 10); ctx.fillRect(px+150-1, py+i, 2, 10); } }
+                } else if (road === 'HORIZONTAL') {
+                    ctx.fillStyle = '#ecf0f1'; for(let i=10; i<TILE_SIZE; i+=30) ctx.fillRect(px+i, py+TILE_SIZE/2-2, 15, 4); 
+                    if (isTown) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; for(let i=0; i<TILE_SIZE; i+=20) { ctx.fillRect(px+i, py+50-1, 10, 2); ctx.fillRect(px+i, py+150-1, 10, 2); } }
+                }
             } else if (type === TYPES.SIDEWALK) {
                 ctx.fillStyle = '#bdc3c7'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
+                ctx.strokeStyle = '#95a5a6'; ctx.lineWidth = 4; ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+                ctx.beginPath(); ctx.moveTo(px + TILE_SIZE/2, py); ctx.lineTo(px + TILE_SIZE/2, py + TILE_SIZE);
+                ctx.moveTo(px, py + TILE_SIZE/2); ctx.lineTo(px + TILE_SIZE, py + TILE_SIZE/2); ctx.stroke();
             } else if (type === TYPES.BUILDING) {
-                ctx.fillStyle = '#2c3e50'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1); 
+                let bColor = BUILDING_COLORS[Math.floor(Math.abs(Math.sin(tx * 1.23 + ty * 3.21) * 100)) % BUILDING_COLORS.length];
+                ctx.fillStyle = bColor; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1); 
+                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px+15, py+15, TILE_SIZE-20, TILE_SIZE-20);
+                ctx.fillStyle = bColor; ctx.fillRect(px+10, py+10, TILE_SIZE-20, TILE_SIZE-20);
+                ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.strokeRect(px+10, py+10, TILE_SIZE-20, TILE_SIZE-20);
             } else if (type === TYPES.WATER) {
                 ctx.fillStyle = '#2980b9'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
+                let wOff = Math.sin(Date.now() * 0.002 + tx + ty) * 10;
+                ctx.fillStyle = '#3498db'; ctx.fillRect(px+30 + wOff, py+30, 80, 10); ctx.fillRect(px+90 - wOff, py+80, 60, 10);
             } else if (type === TYPES.TREE) {
-                ctx.fillStyle = '#27ae60'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
+                ctx.fillStyle = isTownArea(tx,ty) ? '#bdc3c7' : '#27ae60'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
+                ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(px+105, py+105, 55, 0, Math.PI*2); ctx.fill(); 
             } else if (type === TYPES.GRASS) {
-                ctx.fillStyle = '#2ecc71'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
+                ctx.fillStyle = '#27ae60'; ctx.fillRect(px, py, TILE_SIZE+1, TILE_SIZE+1);
             }
         }
     }
 
-    // Dibujar Vehículos
+    // DIBUJAR VEHICULOS Y JUGADORES
     for (let v of serverState.vehicles) drawVehicle(ctx, v);
+    for (let id in serverState.players) drawPlayer(ctx, serverState.players[id], id === myId);
 
-    // Dibujar Jugadores
-    for (let id in serverState.players) {
-        drawPlayer(ctx, serverState.players[id], id === myId);
+    // DIBUJAR COPAS DE LOS ARBOLES POR ENCIMA
+    for (let ty = startTy; ty <= endTy; ty++) {
+        for (let tx = startTx; tx <= endTx; tx++) {
+            if (getTileType(tx, ty) === TYPES.TREE) {
+                let px = tx * TILE_SIZE, py = ty * TILE_SIZE;
+                ctx.fillStyle = '#1e8449'; ctx.beginPath(); ctx.arc(px+100, py+100, 50, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#2ecc71'; ctx.beginPath(); ctx.arc(px+100, py+100, 30, 0, Math.PI*2); ctx.fill();
+            }
+        }
     }
 
     ctx.restore();
+    if(me) drawMinimap();
 }
 
 requestAnimationFrame(loop);
