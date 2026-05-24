@@ -171,7 +171,6 @@ document.getElementById('register-btn').onclick = () => {
     if(pass.length < 6) return showMsg("La contraseña debe tener mínimo 6 caracteres.");
 
     showMsg("Creando cuenta...", "#f1c40f");
-    // Truco: Firebase usa emails, así que le añadimos un dominio falso
     auth.createUserWithEmailAndPassword(user + "@retrocitymmo.com", pass)
         .then(cred => {
             let defaultData = { money: 0, jobLevel: 1, jobXp: 0, username: user };
@@ -179,8 +178,9 @@ document.getElementById('register-btn').onclick = () => {
         })
         .then(data => handleLoginSuccess(user, data))
         .catch(err => {
+            console.error(err);
             if(err.code === 'auth/email-already-in-use') showMsg("Ese nombre de usuario ya existe.");
-            else showMsg("Error al registrarse.");
+            else showMsg("Error: " + err.message); // <-- AHORA MOSTRARÁ EL ERROR REAL
         });
 };
 
@@ -198,8 +198,9 @@ document.getElementById('login-btn').onclick = () => {
             else showMsg("Error: No se encontraron datos del jugador.");
         })
         .catch(err => {
+            console.error(err);
             if(err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') showMsg("Usuario o contraseña incorrectos.");
-            else showMsg("Error al iniciar sesión.");
+            else showMsg("Error: " + err.message); // <-- AHORA MOSTRARÁ EL ERROR REAL
         });
 };
 
